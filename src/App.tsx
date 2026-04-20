@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { Truck, AlertTriangle, FileText, Info, AlertCircle, Phone, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, Filter, BookOpen, X, CheckCircle2, Camera } from 'lucide-react';
+import { Truck, AlertTriangle, FileText, Info, AlertCircle, Phone, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, Filter, BookOpen, X, CheckCircle2 } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { GoogleGenAI, Type } from '@google/genai';
 import { LISTA_NEGRA, CompanyRecord, Status } from './data';
 import { translations, Language } from './i18n';
 import { getDinatranReference, DINATRAN_MATRIX } from './dinatran';
@@ -9,8 +8,6 @@ import { getDinatranReference, DINATRAN_MATRIX } from './dinatran';
 const IVA_PERCENT = 0.10;
 const MANUTENCAO_TOTAL = 0.1503;
 const ADM_DEPREC = 0.1206;
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
 export default function App() {
   const [lang, setLang] = useState<Language>('pt');
@@ -36,72 +33,6 @@ export default function App() {
   const [showGuide, setShowGuide] = useState(false);
   const [showMatriz, setShowMatriz] = useState(false);
   const [showEmpresaSuggestions, setShowEmpresaSuggestions] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsScanning(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64Url = event.target?.result as string;
-        const base64Data = base64Url.split(',')[1];
-        
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [{
-              role: 'user',
-              parts: [
-                  { text: `Extraia dados da Carta de Flete ou Painel de Caminhão anexada. Tente identificar:
-- empresa: Nome da Transportadora Emitente 
-- ruc: Número do RUC da transportadora se houver
-- chapa: Placa ou chapa do veículo trator 
-- distanciaPapel: Quilometragem total (distancia) declarada na carta
-- odometro: O valor do odômetro lido no painel
-- valorFrete: O montante financeiro total do frete pago
-
-Retorne tudo em JSON estrito. Não explique nada.` },
-                  { inlineData: { mimeType: file.type, data: base64Data } }
-              ]
-          }],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                empresa: { type: Type.STRING },
-                ruc: { type: Type.STRING },
-                chapa: { type: Type.STRING },
-                distanciaPapel: { type: Type.NUMBER },
-                odometro: { type: Type.NUMBER },
-                valorFrete: { type: Type.NUMBER }
-              }
-            }
-          }
-        });
-        
-        try {
-          if (response.text) {
-             const data = JSON.parse(response.text);
-             if (data.empresa || data.ruc) setEmpresa(`${data.empresa || ''} ${data.ruc ? `(RUC: ${data.ruc})` : ''}`.trim());
-             if (data.chapa) setChapa(data.chapa);
-             if (data.distanciaPapel) setDistanciaPapel(data.distanciaPapel);
-             if (data.valorFrete) setValorFrete(data.valorFrete);
-             if (data.odometro) setKmFinal(data.odometro);
-          }
-        } catch (e) {
-            console.error("JSON parse failed", e);
-        }
-        setIsScanning(false);
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error(error);
-      setIsScanning(false);
-    }
-  };
 
   const [resultado, setResultado] = useState<any>(null);
 
@@ -421,39 +352,6 @@ Retorne tudo em JSON estrito. Não explique nada.` },
                 </div>
               </div>
             </div>
-
-            {/* AI Scanner Header */}
-             <div className="mb-6 bg-gradient-to-r from-[#1e40af] to-[#3b82f6] rounded-xl p-4 text-white shadow-[0_4px_12px_rgba(30,64,175,0.15)] relative overflow-hidden">
-               <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                 <div className="flex items-center gap-3">
-                   <div className="bg-white/20 p-2.5 rounded-lg border border-white/30 backdrop-blur-sm shrink-0">
-                     <Camera size={22} className="text-white drop-shadow-md" />
-                   </div>
-                   <div>
-                     <h3 className="font-bold text-[15px] m-0 tracking-wide text-white drop-shadow-sm flex gap-1.5 items-center">{t.scannerTitle}</h3>
-                     <p className="text-[12px] text-blue-50 m-0 mt-0.5 max-w-sm drop-shadow-sm leading-snug">{t.scannerDesc}</p>
-                   </div>
-                 </div>
-                 
-                 <label className={`w-full md:w-auto bg-white text-[#1e40af] px-4 py-2.5 rounded-lg font-bold text-[13px] ${isScanning ? 'opacity-80 cursor-wait' : 'cursor-pointer hover:bg-blue-50 hover:shadow-lg transition-all scale-100 active:scale-95'} shadow-sm whitespace-nowrap flex items-center justify-center gap-2 group border-b-[3px] border-blue-200`}>
-                   {isScanning ? (
-                     <span className="flex items-center gap-2">
-                       <svg className="animate-spin h-4 w-4 text-[#1e40af]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                       {t.scannerUploading}
-                     </span>
-                   ) : (
-                     <span className="flex items-center gap-2">
-                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:-translate-y-0.5 transition-transform"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                       {t.scannerBtn}
-                     </span>
-                   )}
-                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} disabled={isScanning} />
-                 </label>
-               </div>
-               {/* Decorators */}
-               <div className="absolute top-0 right-0 -mt-8 -mr-8 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
-               <div className="absolute bottom-0 left-0 -mb-8 -ml-8 w-24 h-24 bg-[#0f172a]/20 rounded-full blur-xl pointer-events-none"></div>
-             </div>
 
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-3">
