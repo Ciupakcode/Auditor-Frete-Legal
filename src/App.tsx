@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { Truck, AlertTriangle, FileText, Info, AlertCircle, Phone, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, Filter, BookOpen, X, CheckCircle2, Camera, Download } from 'lucide-react';
+import React, { useState, useMemo, useRef, useDeferredValue, useEffect } from 'react';
+import { Truck, AlertTriangle, FileText, Info, AlertCircle, Phone, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, Filter, BookOpen, X, CheckCircle2, Camera, Download, ChevronDown, ChevronUp, WifiOff } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { LISTA_NEGRA, CompanyRecord, Status } from './data';
@@ -15,6 +16,10 @@ export default function App() {
   const [lang, setLang] = useState<Language>('pt');
   const t = translations[lang];
 
+  const [expandedManut, setExpandedManut] = useState(false);
+  const [expandedAdm, setExpandedAdm] = useState(false);
+  const [expandedSalarios, setExpandedSalarios] = useState(false);
+
   const [empresa, setEmpresa] = useState('');
   const [chapa, setChapa] = useState('');
   const [distanciaGps, setDistanciaGps] = useState<number | ''>('');
@@ -24,14 +29,32 @@ export default function App() {
   const [pesoCarga, setPesoCarga] = useState<number | ''>('');
   const [valorFrete, setValorFrete] = useState<number | ''>('');
   const [descontoMermas, setDescontoMermas] = useState<number | ''>('');
+  const [diasEstadia, setDiasEstadia] = useState<number | ''>('');
   const [nomeMotorista, setNomeMotorista] = useState('');
   const [cedula, setCedula] = useState('');
   
+  const deferredEmpresa = useDeferredValue(empresa);
+
   // Market Data
   const [cotacaoDolar, setCotacaoDolar] = useState<number>(7550);
   const [precoDiesel, setPrecoDiesel] = useState<number>(8500);
   const [consumoDiesel, setConsumoDiesel] = useState<number>(2.5);
   
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const [showGuide, setShowGuide] = useState(false);
   const [showMatriz, setShowMatriz] = useState(false);
   const [showEmpresaSuggestions, setShowEmpresaSuggestions] = useState(false);
@@ -67,20 +90,18 @@ export default function App() {
   const [resultado, setResultado] = useState<any>(null);
 
   const filteredEmpresas = useMemo(() => {
-    if (!empresa.trim()) return LISTA_NEGRA.slice(0, 50);
-    const search = empresa.toLowerCase().trim();
+    if (!deferredEmpresa.trim()) return LISTA_NEGRA.slice(0, 50);
+    const search = deferredEmpresa.toLowerCase().trim();
     return LISTA_NEGRA.filter(c => 
       c.empresa.toLowerCase().includes(search) || 
       c.ruc.toLowerCase().includes(search)
     ).slice(0, 50);
-  }, [empresa]);
+  }, [deferredEmpresa]);
 
   const riskLevel = useMemo(() => {
-    if (!empresa || empresa.trim() === '') return null;
-    const search = empresa.toLowerCase().trim();
+    if (!deferredEmpresa || deferredEmpresa.trim() === '') return null;
+    const search = deferredEmpresa.toLowerCase().trim();
     const match = LISTA_NEGRA.find(c => 
-       search.includes(c.empresa.toLowerCase()) || 
-       search.includes(c.ruc.toLowerCase()) || 
        c.empresa.toLowerCase().includes(search) || 
        c.ruc.toLowerCase().includes(search)
     );
@@ -90,7 +111,7 @@ export default function App() {
       return { level: 'ATENCAO', infracoes: match.infracoes };
     }
     return { level: 'REGULAR', infracoes: 0 };
-  }, [empresa]);
+  }, [deferredEmpresa]);
 
   // Table State
   const [sortField, setSortField] = useState<keyof CompanyRecord>('infracoes');
@@ -154,21 +175,25 @@ export default function App() {
     const costoRefGps = dinatranRef.costoPorKm; 
     
     const kmRoubado = dGps - dPapel;
-    const prejuizoKm = kmRoubado * costoRefGps;
+    const prejuizoKm = kmRoubado > 0 ? kmRoubado * 7663 : 0;
     
     // Total reference cost for the whole trip length
     const custoMinimoLegal = dinatranRef.costoTotal;
     
-    const descontoIva = vFreteDescontado * IVA_PERCENT;
-    const descontoManut = vFreteDescontado * MANUTENCAO_TOTAL;
-    const descontoAdm = vFreteDescontado * ADM_DEPREC;
+    const descontoIva = vFrete * IVA_PERCENT;
     
-    // Improved Fuel Calculation
-    const custoDieselEstimado = precoDiesel && consumoDiesel 
-      ? (dGps / consumoDiesel) * precoDiesel 
-      : dGps * (costoRefGps * 0.4557);
+    // As per new legal directive
+    const descontoDiesel = custoMinimoLegal * 0.4557;
+    const descontoManut = custoMinimoLegal * 0.1503;
+    const descontoAdm = custoMinimoLegal * 0.1206; // PPET 5.79% + PPCA 6.27%
+    const descontoPedagios = custoMinimoLegal * 0.0821;
+    const descontoSalarios = custoMinimoLegal * 0.1913;
     
-    const lucroFinal = vFreteDescontado - descontoIva - descontoManut - descontoAdm - custoDieselEstimado;
+    const custoEstadia = Number(diasEstadia) > 0 ? (custoMinimoLegal * 0.1652 * Number(diasEstadia)) : 0;
+    
+    const mermasIsAbusive = mermas > (vFrete * 0.005);
+    
+    const lucroFinal = vFreteDescontado - descontoIva - custoMinimoLegal - custoEstadia;
 
     setResultado({
       kmRoubado,
@@ -177,12 +202,16 @@ export default function App() {
       descontoIva,
       descontoManut,
       descontoAdm,
-      custoDieselEstimado,
+      descontoPedagios,
+      descontoSalarios,
+      custoDieselEstimado: descontoDiesel,
+      custoEstadia,
       lucroFinal,
       lucroFinalDolar: lucroFinal / cotacaoDolar,
       vFrete: vFreteDescontado, 
       vFreteBruto: vFrete,
       mermas,
+      mermasIsAbusive,
       dGps,
       dPapel,
       empresa,
@@ -209,6 +238,25 @@ export default function App() {
               <button onClick={() => setLang('es')} className={`px-2 py-1 text-[10px] font-bold rounded-sm transition-colors ${lang === 'es' ? 'bg-[#38bdf8] text-[#0f172a]' : 'text-[#94a3b8] hover:text-white'}`}>ES</button>
             </div>
           </div>
+          
+          <AnimatePresence>
+            {!isOnline && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                className="bg-[#f59e0b]/10 border border-[#f59e0b]/30 rounded-md p-2 flex items-center gap-2 overflow-hidden"
+              >
+                <div className="bg-[#f59e0b]/20 p-1.5 rounded-full flex-shrink-0">
+                  <WifiOff size={14} className="text-[#fcd34d]" />
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-[#fcd34d] uppercase tracking-wider">{t.offlineMode}</div>
+                  <div className="text-[9px] text-[#fbbf24]/80 leading-tight mt-0.5">{t.offlineDesc}</div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         
         <div className="p-5 flex-grow flex flex-col h-[400px] md:h-auto overflow-hidden">
@@ -244,31 +292,38 @@ export default function App() {
                </div>
              </div>
 
-             {/* Virtualized Body */}
-             <div ref={parentRef} className="flex-grow overflow-auto relative custom-scrollbar">
-               <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                   const item = filteredAndSortedList[virtualRow.index];
-                   return (
-                     <div
-                       key={virtualRow.key}
-                       data-index={virtualRow.index}
-                       ref={rowVirtualizer.measureElement}
-                       className="absolute top-0 left-0 w-full grid grid-cols-[3fr_2fr_3fr] gap-2 p-3 border-b border-[#334155]/50 items-center hover:bg-[#334155]/30 transition-colors"
-                       style={{ 
-                         transform: `translateY(${virtualRow.start}px)` 
-                       }}
-                     >
-                       <div className="text-[12px] font-medium truncate pr-1" title={item.empresa}>{item.empresa}</div>
-                       <div className="text-[11px] opacity-80 text-right">{item.infracoes === 0 ? '--' : item.infracoes}</div>
-                       <div className="pl-2 flex overflow-hidden">
-                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide truncate ${item.status === 'Risco Crítico' ? 'bg-[#fee2e2]/10 text-[#fca5a5]' : 'bg-[#fef3c7]/10 text-[#fcd34d]'}`} title={item.status}>
-                           {item.status === 'Risco Crítico' ? t.riscoCritico : t.sobInvestigacao}
-                         </span>
-                       </div>
-                     </div>
-                   );
-                 })}
+              {/* Virtualized Body */}
+              <div ref={parentRef} className="flex-grow overflow-auto relative custom-scrollbar">
+                <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const item = filteredAndSortedList[virtualRow.index];
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        data-index={virtualRow.index}
+                        ref={rowVirtualizer.measureElement}
+                        className="absolute top-0 left-0 w-full"
+                        style={{ 
+                          transform: `translateY(${virtualRow.start}px)` 
+                        }}
+                      >
+                        <motion.div
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.2, delay: (virtualRow.index % 12) * 0.04 }}
+                          className="grid grid-cols-[3fr_2fr_3fr] gap-2 p-3 border-b border-[#334155]/50 items-center hover:bg-[#38bdf8]/15 hover:border-l-2 hover:border-l-[#38bdf8] transition-all cursor-default group"
+                        >
+                          <div className="text-[12px] font-medium truncate pr-1 group-hover:text-white transition-colors" title={item.empresa}>{item.empresa}</div>
+                          <div className="text-[11px] opacity-80 text-right group-hover:text-white transition-colors">{item.infracoes === 0 ? '--' : item.infracoes}</div>
+                          <div className="pl-2 flex overflow-hidden">
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide truncate ${item.status === 'Risco Crítico' ? 'bg-[#fee2e2]/10 text-[#fca5a5]' : 'bg-[#fef3c7]/10 text-[#fcd34d]'}`} title={item.status}>
+                              {item.status === 'Risco Crítico' ? t.riscoCritico : t.sobInvestigacao}
+                            </span>
+                          </div>
+                        </motion.div>
+                      </div>
+                    );
+                  })}
                  {filteredAndSortedList.length === 0 && (
                    <div className="absolute top-0 left-0 w-full p-4 text-center text-xs text-[#94a3b8] opacity-70">
                      {t.nenhumRegistro}
@@ -467,17 +522,30 @@ export default function App() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[13px] font-semibold mb-1.5 text-[#475569]">{t.inputPeso}</label>
-                <input 
-                  type="number" 
-                  className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
-                  value={pesoCarga}
-                  onChange={(e) => setPesoCarga(Number(e.target.value) || '')}
-                  min="1"
-                  step="0.1"
-                  placeholder="0.0"
-                />
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <div>
+                  <label className="block text-[13px] font-semibold mb-1.5 text-[#475569]">{t.inputPeso}</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
+                    value={pesoCarga}
+                    onChange={(e) => setPesoCarga(Number(e.target.value) || '')}
+                    min="1"
+                    step="0.1"
+                    placeholder="0.0"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-semibold mb-1.5 text-[#475569]">{t.inputEstadia || 'Dias Parado (>24h)'}</label>
+                  <input 
+                    type="number" 
+                    className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
+                    value={diasEstadia}
+                    onChange={(e) => setDiasEstadia(Number(e.target.value) || '')}
+                    min="0"
+                    placeholder="Ex: 2"
+                  />
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-3">
@@ -570,9 +638,18 @@ export default function App() {
                       <span className="text-[#64748b]">{t.resFreteOfertado || 'Valor Bruto Ofertado:'}</span>
                       <strong className="text-[#1e293b]">{formatCurrency(resultado.vFreteBruto)}</strong>
                     </div>
+                    <div className="flex justify-between items-center px-4 py-3 border-b border-[#e2e8f0] bg-[#fffbeb]">
+                      <span className="text-[#a16207]">{t.resCustosIva || 'Imposto (IVA 10%):'}</span>
+                      <strong className="text-[#d97706]">- {formatCurrency(resultado.descontoIva)}</strong>
+                    </div>
                     {resultado.mermas > 0 && (
                       <div className="flex justify-between items-center px-4 py-3 border-b border-[#e2e8f0]">
-                        <span className="text-[#ef4444]">{t.resMermas || 'Descontos Carga (Mermas):'}</span>
+                        <span className="text-[#ef4444] flex items-center gap-1.5">
+                          {t.resMermas || 'Descontos Carga (Mermas):'}
+                          {resultado.mermasIsAbusive && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-[#fee2e2] text-[#b91c1c] border border-[#fca5a5]">Abusivo (&gt;0,5%)</span>
+                          )}
+                        </span>
                         <strong className="text-[#ef4444]">- {formatCurrency(resultado.mermas)}</strong>
                       </div>
                     )}
@@ -589,50 +666,128 @@ export default function App() {
                       {t.resCustosTitle}
                     </div>
                     <div className="flex justify-between items-center px-4 py-2.5 border-b border-[#e2e8f0]">
-                      <span className="text-[#64748b]">{t.resCustosDiesel}:</span>
+                      <span className="text-[#64748b]">{t.resCustosDiesel}</span>
                       <span className="text-[#1e293b] font-medium">{formatCurrency(resultado.custoDieselEstimado)}</span>
                     </div>
-                    <div className="flex flex-col px-4 py-2.5 border-b border-[#e2e8f0]">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[#1e293b] font-medium">{t.resCustosManut}</span>
+                    
+                    <div className="flex flex-col border-b border-[#e2e8f0]">
+                      <button 
+                        onClick={() => setExpandedManut(!expandedManut)}
+                        className="flex justify-between items-center px-4 py-2.5 w-full text-left hover:bg-[#f1f5f9] transition-colors focus:outline-none"
+                      >
+                        <span className="text-[#1e293b] font-medium flex items-center gap-2">
+                          {t.resCustosManut}
+                          {expandedManut ? <ChevronUp size={16} className="text-[#64748b]" /> : <ChevronDown size={16} className="text-[#64748b]" />}
+                        </span>
                         <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoManut)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-2 mb-1">
-                        <span>{t.resCustosManutPneus}</span>
-                        <span>{formatCurrency(resultado.descontoManut * 0.50)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-2 mb-1">
-                        <span>{t.resCustosManutOleo}</span>
-                        <span>{formatCurrency(resultado.descontoManut * 0.20)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-2">
-                        <span>{t.resCustosManutPecas}</span>
-                        <span>{formatCurrency(resultado.descontoManut * 0.30)}</span>
-                      </div>
+                      </button>
+                      <AnimatePresence>
+                        {expandedManut && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden bg-white"
+                          >
+                            <div className="px-4 pb-2.5 flex flex-col gap-1">
+                              <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-4">
+                                <span>{t.resCustosManutPecas}</span>
+                                <span>{formatCurrency(resultado.custoMinimoLegal * 0.1241)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-4">
+                                <span>{t.resCustosManutMaoObra}</span>
+                                <span>{formatCurrency(resultado.custoMinimoLegal * 0.0262)}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
 
-                    <div className="flex flex-col px-4 py-2.5 border-b border-[#e2e8f0]">
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[#1e293b] font-medium">{t.resCustosAdm}</span>
-                        <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoAdm)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-2 mb-1">
-                        <span>{t.resCustosAdmDeprec}</span>
-                        <span>{formatCurrency(resultado.descontoAdm * 0.70)}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-2">
-                        <span>{t.resCustosAdmGestao}</span>
-                        <span>{formatCurrency(resultado.descontoAdm * 0.30)}</span>
-                      </div>
+                    <div className="flex flex-col border-b border-[#e2e8f0]">
+                      <button 
+                        onClick={() => setExpandedSalarios(!expandedSalarios)}
+                        className="flex justify-between items-center px-4 py-2.5 w-full text-left hover:bg-[#f1f5f9] transition-colors focus:outline-none"
+                      >
+                        <span className="text-[#1e293b] font-medium flex items-center gap-2">
+                          {t.resCustosSalarios}
+                          {expandedSalarios ? <ChevronUp size={16} className="text-[#64748b]" /> : <ChevronDown size={16} className="text-[#64748b]" />}
+                        </span>
+                        <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoSalarios)}</span>
+                      </button>
+                      <AnimatePresence>
+                        {expandedSalarios && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden bg-white"
+                          >
+                            <div className="px-4 pb-2.5 flex flex-col gap-1">
+                              <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-4">
+                                <span>{t.resCustosSalariosV}</span>
+                                <span>{formatCurrency(resultado.custoMinimoLegal * 0.1467)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-4">
+                                <span>{t.resCustosSalariosF}</span>
+                                <span>{formatCurrency(resultado.custoMinimoLegal * 0.0446)}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
+
                     <div className="flex justify-between items-center px-4 py-2.5 border-b border-[#e2e8f0]">
-                      <span className="text-[#64748b]">{t.resCustosIva}:</span>
-                      <span className="text-[#1e293b] font-medium">{formatCurrency(resultado.descontoIva)}</span>
+                      <span className="text-[#64748b]">{t.resCustosPedagios}</span>
+                      <span className="text-[#1e293b] font-medium">{formatCurrency(resultado.descontoPedagios)}</span>
                     </div>
+
+                    <div className="flex flex-col border-b border-[#e2e8f0]">
+                      <button 
+                        onClick={() => setExpandedAdm(!expandedAdm)}
+                        className="flex justify-between items-center px-4 py-2.5 w-full text-left hover:bg-[#f1f5f9] transition-colors focus:outline-none"
+                      >
+                        <span className="text-[#1e293b] font-medium flex items-center gap-2">
+                          {t.resCustosAdm}
+                          {expandedAdm ? <ChevronUp size={16} className="text-[#64748b]" /> : <ChevronDown size={16} className="text-[#64748b]" />}
+                        </span>
+                        <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoAdm)}</span>
+                      </button>
+                      <AnimatePresence>
+                        {expandedAdm && (
+                          <motion.div 
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden bg-white"
+                          >
+                            <div className="px-4 pb-2.5 flex flex-col gap-1">
+                              <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-4">
+                                <span>{t.resCustosAdmDeprec}</span>
+                                <span>{formatCurrency(resultado.custoMinimoLegal * 0.0579)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[12px] text-[#64748b] ml-4">
+                                <span>{t.resCustosAdmGestao}</span>
+                                <span>{formatCurrency(resultado.custoMinimoLegal * 0.0627)}</span>
+                              </div>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {resultado.custoEstadia > 0 && (
+                      <div className="flex justify-between items-center px-4 py-2.5 border-b border-[#e2e8f0] bg-[#fefce8]">
+                        <span className="text-[#a16207]">{t.resCustosEstadia}</span>
+                        <span className="text-[#854d0e] font-medium">{formatCurrency(resultado.custoEstadia)}</span>
+                      </div>
+                    )}
+
                     <div className="flex justify-between items-center px-4 py-3 bg-[#f8fafc] font-bold">
                       <span className="text-[#475569] uppercase text-[11px]">{t.resCustosTotal}:</span>
                       <span className="text-[#dc2626]">
-                        {formatCurrency(resultado.custoDieselEstimado + resultado.descontoManut + resultado.descontoAdm + resultado.descontoIva)}
+                        {formatCurrency(resultado.custoDieselEstimado + resultado.descontoManut + resultado.descontoSalarios + resultado.descontoPedagios + resultado.descontoAdm + resultado.custoEstadia)}
                       </span>
                     </div>
                   </div>
@@ -676,109 +831,119 @@ export default function App() {
                     </div>
                   </div>
 
-                    <div className="bg-[#f8fafc] border border-[#e2e8f0] p-4 text-left rounded-md mt-4">
-                      
-                      <h4 className="font-bold text-[#0f172a] mb-3 flex items-center gap-2 text-[14px] uppercase border-b border-[#e2e8f0] pb-2">
-                        <Camera size={16} /> {t.chkTitle}
-                      </h4>
-                      <p className="text-[12px] text-[#475569] mb-3 leading-relaxed">
-                        {t.chkDesc}
-                      </p>
-                      
-                      <ul className="text-[13px] text-[#334155] space-y-2.5 mb-4">
-                        <li className="flex items-start gap-2.5">
-                          <CheckCircle2 size={16} className="text-[#10b981] shrink-0 mt-0.5" />
-                          <span><strong>Foto 1:</strong> {t.chk1}</span>
-                        </li>
-                        <li className="flex items-start gap-2.5">
-                          <CheckCircle2 size={16} className="text-[#10b981] shrink-0 mt-0.5" />
-                          <span><strong>Foto 2:</strong> {t.chk2}</span>
-                        </li>
-                        <li className="flex items-start gap-2.5">
-                          <CheckCircle2 size={16} className="text-[#10b981] shrink-0 mt-0.5" />
-                          <span><strong>Dados:</strong> {t.chk3}</span>
-                        </li>
-                      </ul>
-
-                      <div className="bg-[#fef2f2] border-l-4 border-[#ef4444] p-3.5 rounded-r-md mb-5 flex gap-3 items-start shadow-sm mt-5">
-                        <AlertCircle size={20} className="text-[#ef4444] shrink-0 mt-0.5" />
-                        <div className="text-[12px] leading-relaxed text-[#7f1d1d]">
-                          <strong className="block mb-1 uppercase text-[#991b1b] text-[13px]">{t.avisoSeguranca}</strong> 
-                          {t.avisoDesc}
-                        </div>
-                      </div>
-                    
-                      <div className="bg-[#f1f5f9] p-4 rounded-lg border border-[#e2e8f0]">
-                        <h4 className="font-bold text-[#b91c1c] mb-2 flex items-center gap-2 text-[14px] uppercase"><AlertTriangle size={16} /> {t.denunciaTitle}</h4>
-                        <p className="text-[13px] text-[#475569] mb-3">{t.denunciaDesc}</p>
+                    {resultado.vFrete < resultado.custoMinimoLegal && (
+                      <div className="bg-[#f8fafc] border border-[#e2e8f0] p-4 text-left rounded-md mt-4">
                         
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 bg-white border border-[#cbd5e1] p-3 rounded shadow-sm">
-                          <div>
-                            <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputNome || 'Nome do Denunciante/Motorista'}</label>
-                            <input 
-                              type="text" 
-                              className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
-                              value={nomeMotorista}
-                              onChange={(e) => setNomeMotorista(e.target.value)}
-                              placeholder="João da Silva"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputCedula || 'Número da Cédula / Doc'}</label>
-                            <input 
-                              type="text" 
-                              className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
-                              value={cedula}
-                              onChange={(e) => setCedula(e.target.value)}
-                              placeholder="1234567"
-                            />
+                        <h4 className="font-bold text-[#0f172a] mb-3 flex items-center gap-2 text-[14px] uppercase border-b border-[#e2e8f0] pb-2">
+                          <Camera size={16} /> {t.chkTitle}
+                        </h4>
+                        <p className="text-[12px] text-[#475569] mb-3 leading-relaxed">
+                          {t.chkDesc}
+                        </p>
+                        
+                        <ul className="text-[13px] text-[#334155] space-y-2.5 mb-4">
+                          <li className="flex items-start gap-2.5">
+                            <CheckCircle2 size={16} className="text-[#10b981] shrink-0 mt-0.5" />
+                            <span><strong>Foto 1:</strong> {t.chk1}</span>
+                          </li>
+                          <li className="flex items-start gap-2.5">
+                            <CheckCircle2 size={16} className="text-[#10b981] shrink-0 mt-0.5" />
+                            <span><strong>Foto 2:</strong> {t.chk2}</span>
+                          </li>
+                          <li className="flex items-start gap-2.5">
+                            <CheckCircle2 size={16} className="text-[#10b981] shrink-0 mt-0.5" />
+                            <span><strong>Dados:</strong> {t.chk3}</span>
+                          </li>
+                        </ul>
+
+                        <div className="bg-[#fef2f2] border-l-4 border-[#ef4444] p-3.5 rounded-r-md mb-5 flex gap-3 items-start shadow-sm mt-5">
+                          <AlertCircle size={20} className="text-[#ef4444] shrink-0 mt-0.5" />
+                          <div className="text-[12px] leading-relaxed text-[#7f1d1d]">
+                            <strong className="block mb-1 uppercase text-[#991b1b] text-[13px]">{t.avisoSeguranca}</strong> 
+                            {t.avisoDesc}
                           </div>
                         </div>
+                      
+                        <div className="bg-[#f1f5f9] p-4 rounded-lg border border-[#e2e8f0]">
+                          <h4 className="font-bold text-[#b91c1c] mb-2 flex items-center gap-2 text-[14px] uppercase"><AlertTriangle size={16} /> {t.denunciaTitle}</h4>
+                          <p className="text-[13px] text-[#475569] mb-3">{t.denunciaDesc}</p>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 bg-white border border-[#cbd5e1] p-3 rounded shadow-sm">
+                            <div>
+                              <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputNome || 'Nome do Denunciante/Motorista'}</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
+                                value={nomeMotorista}
+                                onChange={(e) => setNomeMotorista(e.target.value)}
+                                placeholder="João da Silva"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputCedula || 'Número da Cédula / Doc'}</label>
+                              <input 
+                                type="text" 
+                                className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
+                                value={cedula}
+                                onChange={(e) => setCedula(e.target.value)}
+                                placeholder="1234567"
+                              />
+                            </div>
+                          </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-white border border-[#cbd5e1] p-3 rounded shadow-sm">
-                          <div>
-                            <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputOdInicial}</label>
-                            <input 
-                              type="number" 
-                              className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
-                              value={kmInicial}
-                              onChange={(e) => setKmInicial(Number(e.target.value) || '')}
-                              placeholder="Ex: 120500"
-                            />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 bg-white border border-[#cbd5e1] p-3 rounded shadow-sm">
+                            <div>
+                              <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputOdInicial}</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
+                                value={kmInicial}
+                                onChange={(e) => setKmInicial(Number(e.target.value) || '')}
+                                placeholder="Ex: 120500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputOdFinal}</label>
+                              <input 
+                                type="number" 
+                                className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
+                                value={kmFinal}
+                                onChange={(e) => setKmFinal(Number(e.target.value) || '')}
+                                placeholder="Ex: 120850"
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-[12px] font-semibold mb-1 text-[#475569]">{t.inputOdFinal}</label>
-                            <input 
-                              type="number" 
-                              className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
-                              value={kmFinal}
-                              onChange={(e) => setKmFinal(Number(e.target.value) || '')}
-                              placeholder="Ex: 120850"
-                            />
-                          </div>
+
+                          {kmInicial === '' || kmFinal === '' || Number(kmFinal) <= Number(kmInicial) || !nomeMotorista || !cedula ? (
+                            <button 
+                              disabled
+                              className="w-full bg-[#cbd5e1] text-[#64748b] px-5 py-3.5 rounded font-bold cursor-not-allowed flex items-center justify-center gap-2 text-[14px] uppercase border border-[#94a3b8] shadow-sm"
+                            >
+                              <Phone size={18} />
+                              {t.btnPreenchaOd}
+                            </button>
+                          ) : !isOnline ? (
+                            <button 
+                              disabled
+                              className="w-full bg-[#cbd5e1] text-[#64748b] px-5 py-3.5 rounded font-bold cursor-not-allowed flex items-center justify-center gap-2 text-[14px] uppercase border border-[#94a3b8] shadow-sm"
+                            >
+                              <WifiOff size={18} />
+                              {t.btnConexao}
+                            </button>
+                          ) : (
+                            <a 
+                              href={`https://wa.me/595962352235?text=${encodeURIComponent(t.generateWhatsApp(resultado.empresa, resultado.chapa, kmInicial, kmFinal, resultado.dGps, resultado.dPapel, resultado.vFrete, resultado.lucroFinal, nomeMotorista, cedula))}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="w-full bg-[#25d366] hover:bg-[#20bd5a] text-white px-5 py-4 rounded font-bold cursor-pointer shadow-[0_4px_14px_rgba(37,211,102,0.3)] hover:shadow-[0_4px_20px_rgba(37,211,102,0.4)] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 text-[14px]"
+                            >
+                              <Phone size={20} fill="currentColor" className="animate-pulse" />
+                              {t.btnEnviarDossie}
+                            </a>
+                          )}
                         </div>
-
-                        {kmInicial === '' || kmFinal === '' || Number(kmFinal) <= Number(kmInicial) || !nomeMotorista || !cedula ? (
-                          <button 
-                            disabled
-                            className="w-full bg-[#cbd5e1] text-[#64748b] px-5 py-3.5 rounded font-bold cursor-not-allowed flex items-center justify-center gap-2 text-[14px] uppercase border border-[#94a3b8] shadow-sm"
-                          >
-                            <Phone size={18} />
-                            {t.btnPreenchaOd}
-                          </button>
-                        ) : (
-                          <a 
-                            href={`https://wa.me/595962352235?text=${encodeURIComponent(t.generateWhatsApp(resultado.empresa, resultado.chapa, kmInicial, kmFinal, resultado.dGps, resultado.dPapel, resultado.vFrete, resultado.lucroFinal, nomeMotorista, cedula))}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="w-full bg-[#25d366] hover:bg-[#20bd5a] text-white px-5 py-4 rounded font-bold cursor-pointer shadow-[0_4px_14px_rgba(37,211,102,0.3)] hover:shadow-[0_4px_20px_rgba(37,211,102,0.4)] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 text-[14px]"
-                          >
-                            <Phone size={20} fill="currentColor" className="animate-pulse" />
-                            {t.btnEnviarDossie}
-                          </a>
-                        )}
                       </div>
-                    </div>
+                    )}
                 </div>
               </div>
             </section>
