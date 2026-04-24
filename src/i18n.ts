@@ -1,4 +1,4 @@
-export type Language = 'pt' | 'es';
+export type Language = 'pt' | 'es' | 'jop';
 
 export const translations = {
   pt: {
@@ -265,6 +265,139 @@ export const translations = {
     footerAss: "Firmado Digitalmente: EXP-2600-0591-20B",
     generateWhatsApp: (empresa: string, chapa: string, kmInicial: number | string, kmFinal: number | string, dGps: number, dPapel: number, vFrete: number, lucroFinal: number, nome: string, cedula: string) => {
         return `*DENUNCIA DINATRAN (Decreto 5.791/2021)* \n\n🏢 *Nombre de la empresa:* ${empresa || 'No informada'} \n🚛 *Número de coche o chapa:* ${chapa || 'No informada'} \n👤 *Nombre, apellido:* ${nome}\n🪪 *Número de cédula:* ${cedula}\n\n*Motivo detallado:* Oferta de flete por debajo del referencial del Art. 4º (Decreto 5.791/2021) y posible fraude en kilometraje.\n\n*Desglose de Auditoría AI:*\n📍 *Odómetro Relevado:* ${kmInicial} km inicial ➡️ ${kmFinal} km final\n📏 *Distancia Total Recorrida:* ${dGps} km \n📄 *Distancia Declarada en Carta:* ${dPapel} km \n💰 *Valor Ofrecido:* ₲ ${vFrete.toLocaleString('es-PY')} \n📉 *Pérdida Calculada:* ₲ ${Math.abs(lucroFinal).toLocaleString('es-PY')} \n\n*⚠️ Anexos que envío a continuación:* Foto y/o video de la Carta de Flete y del Tablero/Odómetro.`;
+    }
+  },
+  jop: {
+    appTitle: "Auditor Flete Legal",
+    appSubtitle: "V1.4 - Fiscalización Portuaria",
+    offlineMode: "MODO OFFLINE",
+    offlineDesc: "Oîmbaite mba'e ndoikói internet'ỹre (mba'éichapa denunciatávo), péro umi cálculo ojapo porãite.",
+    listaNegra: "Lista Negra",
+    todos: "Opavave",
+    riscoCritico: "Ivaíma (Crítico)",
+    sobInvestigacao: "Oñehechahína",
+    empresa: "Empresa",
+    infracoes: "Infracciones",
+    status: "Estado",
+    nenhumRegistro: "Ndaipóri mba'eve.",
+    lblDecreto5791: "Base mínima de negociasiõ.",
+    lblDecreto2327: "Multa 10 jornales (Carta Fraude).",
+    
+    mainTitle: "Auditoría de Carga (Ko'áĝa)",
+    mainDesc: "Eñangareko nde pirapirére ani haguã nde joperu.",
+    btnGuide: "Guía Rápida Ley Rehegua",
+    btnGuideHide: "Emombe'u kañy",
+    
+    guideTitle: "GUÍA RÁPIDA: OPERACIÓN FLETE LEGAL",
+    guide1Title: "1. EHECHA RAẼ LA EMPRESA 🔴",
+    guide1Desc: "Eheja mboyve la flete, eha'ã i-nombre. Pe Alerta Pytã he'ise hetaiterei pagamímaha legal-gui.",
+    guide2Title: "2. EPYTU'U EL PRECIO ⚖️",
+    guide2Desc: "Pe flete ARAKA'EVE ndaikatúi imichĩve Costo Operativo-gui (Art. 4º - Decreto 5.791/2021). Ko app ojapo pe cálculo.",
+    guide3Title: "3. CARTA DE FLETE OBLIGATORIA 📄",
+    guide3Desc: "Ejerure upe documento obligatório. Ndaipórirõ, multa de 10 JORNALES (Decreto 2.327/2024).",
+    guide4Title: "4. ¡EDENUNCIÁ UPEVETE! 📲",
+    guide4Desc: "Ko app ojapo denuncia completaite DINATRAN WhatsApp-pe guarã (0962) 35 22 25. Eñongatu foto tablero y Carta Flete mba'e.",
+    
+    alertIlegalTitle: "ALERTA: FLETE ILEGAL OJETOPÁVA",
+    alertIlegalDesc: "Pe valor ojeofrecéva imichĩve pe mínimo legalitegui.",
+    
+    scannerTitle: "Escáner de Evidencias (IA)",
+    scannerDesc: "Nohẽ foto Carta Flete y Odómetrogui. Inteligencia Artificial ombojojáta DINATRAN lista ndive.",
+    scannerUploading: "Omoñe'ẽhína...",
+    scannerBtn: "Emondo Foto",
+    scannerError: "Emoĩmba Chapa, Distancia ha Valor Flete e-escaneá mboyve.",
+    
+    inputTransportadora: "Transportadora (Nombre térã RUC)",
+    inputSearch: "Eheka térã ehai...",
+    alertaCritico: "ALERTA CRÍTICA",
+    alertaMassivo: "Ivaíma la isubfacturación kuéra.",
+    alertaAtencao: "EÑANGAREKÓKE",
+    alertaIrregularidades: "Oñehesa'ỹijo hína umi irregularidades rehegue.",
+    alertaRegular: "REGULAR",
+    alertaSemRegistros: "Ndaipóri infracción guasu ko'áĝa.",
+    
+    inputChapa: "Chapa (Placa)",
+    inputDistanciaReal: "Distancia Real (GPS/Maps)",
+    inputDistanciaDoc: "Distancia Carta (Ojeofrecéva)",
+    inputPeso: "Carga Pepo (Ton)",
+    inputValor: "Valor Ojeofrecéva (₲)",
+    inputMermas: "Descuento Carga (Mermas) ₲",
+    btnAuditar: "Ejapo Jey Auditoría",
+    btnSalvarPDF: "Eñongatu PDF",
+    
+    resTitle: "RESULTADO AUDITORÍA REHEGUA",
+    resPrejuizoBadge: "Pérdida (Prejuicio)",
+    resLiquido: "Michĩve",
+    resTabela: "Tabla Comparativa",
+    resMatrizRef: "Matriz de Costos (Ref.",
+    resFreteOfertado: "Valor Bruto Ojeofrecéva:",
+    resMermas: "Descuento Carga (Mermas):",
+    resDiferenca: "Diferencia Legal Mínimo:",
+    resKmRoubado: "KM Oñemondáva",
+    
+    // Mercado
+    marketTitle: "Cotizaciones & Mercado",
+    marketDolar: "Cotización Dólar (₲)",
+    marketDiesel: "Precio Diesel (₲/L)",
+    marketConsumo: "Consumo Medio (km/L)",
+    resLucroDolar: "Ganancia Ojekalkuláva (USD)",
+    
+    // Matriz Modal
+    modalMatrizTitle: "Matriz de Costos DINATRAN",
+    modalMatrizKm: "Distancia (km)",
+    modalMatrizBase: "Costo Base (₲)",
+    modalMatrizCoeff: "Coeficiente",
+    modalMatrizLegal: "Precio Legal (₲/km)",
+    btnVerMatriz: "Ehecha Tabla Referencia",
+    
+    // Tabela de Custos Detalhada
+    resCustosTitle: "Detalle Costo Operativo",
+    resCustosDiesel: "Combustible (PPC) - 45,57%",
+    resCustosManut: "Mantenimiento Total - 15,03%",
+    resCustosManutPecas: "• Repuestos (12,41%)",
+    resCustosManutMaoObra: "• Mano de Obra (2,62%)",
+    resCustosAdm: "Admin. & Depreciación - 12,06%",
+    resCustosAdmDeprec: "• Adquisición/Depreciación (PPET) - 5,79%",
+    resCustosAdmGestao: "• Administración (PPCA) - 6,27%",
+    resCustosPedagios: "Peajes (PPCP) - 8,21%",
+    resCustosSalarios: "Conducción Total - 19,13%",
+    resCustosSalariosV: "• Conducción (Variable) - 14,67%",
+    resCustosSalariosF: "• Conducción (Fija) - 4,46%",
+    resCustosEstadia: "Días de Espera (Estadía >24h)",
+    resCustosIva: "Reserva p/ Impuesto (IVA 10%)",
+    resCustosItem: "Gasto",
+    resCustosTotal: "Costo Total de Operación",
+    
+    resPisoLegal: "Piso Legal",
+    resDepreciação: "Depreciación",
+    
+    vereditoTitle: "VEREDICTO FINAL",
+    vereditoNegativo: "Re-pagahína e-trabahá haguã ko viajepe.",
+    vereditoPositivo: "Viaje iporãva, oheja ganancia libre.",
+    
+    chkTitle: "Checklist Evidencias en App",
+    chkDesc: "Ikatuhaguy upe denuncia oike porã upe Expediente nº 26000059120B ndive, emono'õ:",
+    chk1: "Carta Flete (ojelee porãva, hembiguasúva).",
+    chk2: "Tablero Camión (ohechaukáva KM total e-descargahápe).",
+    chk3: "Datos: Empresa nombre y placa (chapa).",
+    
+    avisoSeguranca: "Aviso Legal",
+    avisoDesc: "Pe Carta de Flete ndaipórirõ ha'e peteĩ infracción 10 jornales multa orekóva. Upévare, exerure upe documento ha'e ne derecho y obligación.",
+    
+    denunciaTitle: "Ejapo Denuncia App-pe",
+    denunciaDesc: "Emoĩ katuete pe tablero final e-confirmá haguã pe kilometraje:',",
+    inputOdInicial: "Odómetro Iñepyrũme (Carga)",
+    inputOdFinal: "Odómetro Ipahápe (Descarga)",
+    inputNome: "Denunciante Réra",
+    inputCedula: "Cédula Número",
+    btnPreenchaOd: "Emoĩmandu umi Dato e-liberá haguã",
+    btnConexao: "Oikotevẽ Conexión",
+    btnEnviarDossie: "EMONDO DOSSIER WHATSAPP DINATRAN",
+    
+    footerTxt: "Auditor Independiente Fretes • Camionero Pytyvõhára",
+    footerAss: "Oñefirmáva Digitalmente: EXP-2600-0591-20B",
+    generateWhatsApp: (empresa: string, chapa: string, kmInicial: number | string, kmFinal: number | string, dGps: number, dPapel: number, vFrete: number, lucroFinal: number, nome: string, cedula: string) => {
+        return `*DENUNCIA DINATRAN (Decreto 5.791/2021)* \n\n🏢 *Empresa:* ${empresa || 'Ndojeikuaái'} \n🚛 *Chapa:* ${chapa || 'Ndojeikuaái'} \n👤 *Réra:* ${nome}\n🪪 *Cédula:* ${cedula}\n\n*Motivo:* Flete oĩ guýpe Art. 4º-gui (Decreto 5.791/2021) ha ikatúva oî fraude kilometraje-pe.\n\n*Auditoría AI he'íva:*\n📍 *Odómetro Relevado:* ${kmInicial} km iñepyrũme ➡️ ${kmFinal} km ipahápe\n📏 *Distancia Total:* ${dGps} km \n📄 *Distancia Carta-pe:* ${dPapel} km \n💰 *Valor Ojeofrecéva:* ₲ ${vFrete.toLocaleString('es-PY')} \n📉 *Pérdida (Prejuicio):* ₲ ${Math.abs(lucroFinal).toLocaleString('es-PY')} \n\n*⚠️ Anexos:* Amondo ko'áĝa foto o video pe Carta Flegte y Tablero/Odómetro rehegua.`;
     }
   }
 };

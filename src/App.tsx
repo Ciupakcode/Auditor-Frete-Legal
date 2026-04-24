@@ -4,7 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { LISTA_NEGRA, CompanyRecord, Status } from './data';
+import { LISTA_NEGRA, TRANSPORTADORAS_VIGENTES, CompanyRecord, Status } from './data';
 import { translations, Language } from './i18n';
 import { getDinatranReference, DINATRAN_MATRIX } from './dinatran';
 
@@ -67,18 +67,30 @@ export default function App() {
     if (!printRef.current) return;
     setIsExportingPDF(true);
     try {
-      // Small delay to ensure any UI states update if needed before printing
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Allow React to re-render in expanded export state
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true });
+      const canvas = await html2canvas(printRef.current, { scale: 2, useCORS: true, windowWidth: 800 });
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      // Calculate height maintaining aspect ratio
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfPageHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
       
-      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfPageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfPageHeight;
+      }
+      
       pdf.save(`Auditoria-Frete-${chapa || 'Legal'}.pdf`);
     } catch (err) {
       console.error('Erro ao gerar PDF', err);
@@ -89,29 +101,56 @@ export default function App() {
 
   const [resultado, setResultado] = useState<any>(null);
 
+  const allEmpresas = useMemo(() => {
+    // Deduplicate by RUC. We want LISTA_NEGRA to take precedence if there are duplicates.
+    const map = new Map<string, CompanyRecord>();
+    
+    // Base regulars
+    TRANSPORTADORAS_VIGENTES.forEach(c => map.set(c.ruc, c));
+    
+    // Negatives override
+    LISTA_NEGRA.forEach(c => map.set(c.ruc, c));
+    
+    return Array.from(map.values());
+  }, []);
+
   const filteredEmpresas = useMemo(() => {
-    if (!deferredEmpresa.trim()) return LISTA_NEGRA.slice(0, 50);
+    if (!deferredEmpresa.trim()) return allEmpresas.slice(0, 50);
     const search = deferredEmpresa.toLowerCase().trim();
-    return LISTA_NEGRA.filter(c => 
+    return allEmpresas.filter(c => 
       c.empresa.toLowerCase().includes(search) || 
-      c.ruc.toLowerCase().includes(search)
+      c.ruc.toLowerCase().includes(search) ||
+      search.includes(c.ruc.toLowerCase())
     ).slice(0, 50);
-  }, [deferredEmpresa]);
+  }, [deferredEmpresa, allEmpresas]);
 
   const riskLevel = useMemo(() => {
     if (!deferredEmpresa || deferredEmpresa.trim() === '') return null;
     const search = deferredEmpresa.toLowerCase().trim();
-    const match = LISTA_NEGRA.find(c => 
-       c.empresa.toLowerCase().includes(search) || 
-       c.ruc.toLowerCase().includes(search)
-    );
+    
+    // First try an exact match by RUC if the user selected from the dropdown "(RUC: 12345)"
+    const rucMatch = deferredEmpresa.match(/\(RUC:\s*([\d\.-]+)\)/i);
+    let match;
+    
+    if (rucMatch) {
+       match = allEmpresas.find(c => c.ruc === rucMatch[1]);
+    }
+
+    if (!match) {
+      match = allEmpresas.find(c => 
+         c.empresa.toLowerCase().includes(search) || 
+         c.ruc.toLowerCase().includes(search) ||
+         search.includes(c.ruc.toLowerCase())
+      );
+    }
     
     if (match) {
       if (match.status === 'Risco Crítico') return { level: 'CRITICO', infracoes: match.infracoes };
-      return { level: 'ATENCAO', infracoes: match.infracoes };
+      if (match.status === 'Sob Investigação') return { level: 'ATENCAO', infracoes: match.infracoes };
+      return { level: 'REGULAR', infracoes: 0 };
     }
     return { level: 'REGULAR', infracoes: 0 };
-  }, [deferredEmpresa]);
+  }, [deferredEmpresa, allEmpresas]);
 
   // Table State
   const [sortField, setSortField] = useState<keyof CompanyRecord>('infracoes');
@@ -120,9 +159,12 @@ export default function App() {
 
   // Table Logic
   const filteredAndSortedList = useMemo(() => {
-    let result = LISTA_NEGRA;
+    let result = allEmpresas;
     if (filterStatus !== 'All') {
       result = result.filter(item => item.status === filterStatus);
+    } else {
+      // If 'All', show only the true "Lista Negra" (greater than 0 infractions)
+      result = result.filter(item => item.infracoes > 0);
     }
     result = [...result].sort((a, b) => {
       const aValue = a[sortField];
@@ -140,7 +182,7 @@ export default function App() {
     count: filteredAndSortedList.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 48,
-    overscan: 5,
+    overscan: 10,
   });
 
   const handleSort = (field: keyof CompanyRecord) => {
@@ -236,6 +278,7 @@ export default function App() {
             <div className="flex bg-[#1e293b] rounded-md p-0.5 border border-[#334155] h-fit">
               <button onClick={() => setLang('pt')} className={`px-2 py-1 text-[10px] font-bold rounded-sm transition-colors ${lang === 'pt' ? 'bg-[#38bdf8] text-[#0f172a]' : 'text-[#94a3b8] hover:text-white'}`}>PT</button>
               <button onClick={() => setLang('es')} className={`px-2 py-1 text-[10px] font-bold rounded-sm transition-colors ${lang === 'es' ? 'bg-[#38bdf8] text-[#0f172a]' : 'text-[#94a3b8] hover:text-white'}`}>ES</button>
+              <button onClick={() => setLang('jop')} className={`px-2 py-1 text-[10px] font-bold rounded-sm transition-colors ${lang === 'jop' ? 'bg-[#38bdf8] text-[#0f172a]' : 'text-[#94a3b8] hover:text-white'}`}>JOP</button>
             </div>
           </div>
           
@@ -274,6 +317,7 @@ export default function App() {
                 <option value="All">{t.todos}</option>
                 <option value="Risco Crítico">{t.riscoCritico}</option>
                 <option value="Sob Investigação">{t.sobInvestigacao}</option>
+                <option value="Regular">Regular</option>
               </select>
             </div>
           </div>
@@ -307,20 +351,17 @@ export default function App() {
                           transform: `translateY(${virtualRow.start}px)` 
                         }}
                       >
-                        <motion.div
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ duration: 0.2, delay: (virtualRow.index % 12) * 0.04 }}
+                        <div
                           className="grid grid-cols-[3fr_2fr_3fr] gap-2 p-3 border-b border-[#334155]/50 items-center hover:bg-[#38bdf8]/15 hover:border-l-2 hover:border-l-[#38bdf8] transition-all cursor-default group"
                         >
                           <div className="text-[12px] font-medium truncate pr-1 group-hover:text-white transition-colors" title={item.empresa}>{item.empresa}</div>
                           <div className="text-[11px] opacity-80 text-right group-hover:text-white transition-colors">{item.infracoes === 0 ? '--' : item.infracoes}</div>
                           <div className="pl-2 flex overflow-hidden">
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide truncate ${item.status === 'Risco Crítico' ? 'bg-[#fee2e2]/10 text-[#fca5a5]' : 'bg-[#fef3c7]/10 text-[#fcd34d]'}`} title={item.status}>
-                              {item.status === 'Risco Crítico' ? t.riscoCritico : t.sobInvestigacao}
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide truncate ${item.status === 'Risco Crítico' ? 'bg-[#fee2e2]/10 text-[#fca5a5]' : item.status === 'Regular' ? 'bg-[#ecfdf5]/10 text-[#6ee7b7]' : 'bg-[#fef3c7]/10 text-[#fcd34d]'}`} title={item.status}>
+                              {item.status === 'Risco Crítico' ? t.riscoCritico : item.status === 'Regular' ? 'Regular' : t.sobInvestigacao}
                             </span>
                           </div>
-                        </motion.div>
+                        </div>
                       </div>
                     );
                   })}
@@ -398,7 +439,7 @@ export default function App() {
         <div className="flex flex-col lg:grid lg:grid-cols-[1fr_1.5fr] gap-6 flex-grow items-start">
           
           {/* Card Form */}
-          <section className="bg-white border border-[#e2e8f0] rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] p-5 w-full">
+          <section className="bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-6 w-full lg:sticky lg:top-8 transition-shadow hover:shadow-md">
             
             {/* Market Data Config */}
             <div className="mb-6 p-4 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl">
@@ -462,10 +503,14 @@ export default function App() {
                           }}
                           className="p-2.5 hover:bg-[#f1f5f9] cursor-pointer border-b border-[#e2e8f0] text-sm last:border-0"
                         >
-                          <div className="font-semibold text-[#1e293b] truncate text-[13px]">{s.empresa}</div>
+                          <div className="font-semibold text-[#1e293b] truncate text-[13px]">
+                            {s.empresa}
+                          </div>
                           <div className="text-[11px] text-[#64748b] mt-0.5 flex items-center gap-2">
                             <span>RUC: {s.ruc}</span>
-                            {s.status === 'Risco Crítico' && <span className="text-[#ef4444] font-bold">⚠️ Risco Crítico</span>}
+                            {s.status === 'Risco Crítico' && <span className="text-[#ef4444] font-bold">⚠️ {t.riscoCritico}</span>}
+                            {s.status === 'Sob Investigação' && <span className="text-[#f59e0b] font-bold">⚠️ {t.sobInvestigacao}</span>}
+                            {s.status === 'Regular' && <span className="text-[#10b981] font-bold">✅ Regular</span>}
                           </div>
                         </li>
                       ))}
@@ -596,33 +641,78 @@ export default function App() {
             <section className="flex flex-col gap-4 w-full">
               <div 
                 ref={printRef}
-                className="bg-white border border-[#e2e8f0] rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] p-5 flex flex-col h-full relative"
+                className={`bg-white border border-[#e2e8f0] rounded-xl shadow-sm p-6 flex flex-col relative ${isExportingPDF ? 'p-10 text-[16px] w-[800px] h-auto max-w-none' : 'h-full'}`}
+                style={{
+                  ...(isExportingPDF ? { position: 'absolute', top: '-9999px', left: '-9999px' } : {})
+                }}
               >
+                {isExportingPDF && (
+                  <div className="mb-6 border-b-2 border-[#1e293b] pb-6">
+                     <div className="flex justify-between items-end mb-6">
+                        <div>
+                           <h2 className="text-2xl font-black text-[#1e293b] uppercase flex items-center gap-2 m-0 p-0">
+                             <Truck size={28} />
+                             {t.appTitle}
+                           </h2>
+                           <p className="text-sm text-[#64748b] font-medium mt-1">{t.appSubtitle} - RELATÓRIO DE AUDITORIA</p>
+                        </div>
+                        <div className="text-right text-[11px] text-[#64748b] bg-[#f8fafc] p-3 rounded border border-[#e2e8f0]">
+                           <p className="mb-1"><strong>Data da Auditoria:</strong> {new Date().toLocaleDateString('es-PY')} {new Date().toLocaleTimeString('es-PY')}</p>
+                           <p><strong>Autenticação Sistema:</strong> EXP-2600-0591-20B</p>
+                        </div>
+                     </div>
+                     
+                     <div className="grid grid-cols-2 gap-4 bg-[#f1f5f9] p-5 rounded-md text-sm border border-[#e2e8f0]">
+                        <div>
+                          <p className="text-[#64748b] uppercase text-[10px] tracking-wider font-bold mb-1">Empresa Transportadora</p>
+                          <p className="font-bold text-[#1e293b] text-base">{resultado.empresa || 'NÃO INFORMADA'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[#64748b] uppercase text-[10px] tracking-wider font-bold mb-1">Veículo (Chapa)</p>
+                          <p className="font-bold text-[#1e293b] text-base">{resultado.chapa || 'NÃO INFORMADA'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[#64748b] uppercase text-[10px] tracking-wider font-bold mb-1">Distância Declarada / GPS</p>
+                          <p className="font-bold text-[#1e293b] text-base">{resultado.dPapel} km <span className="text-[#94a3b8] font-normal mx-1">vs</span> {resultado.dGps} km</p>
+                        </div>
+                        <div>
+                          <p className="text-[#64748b] uppercase text-[10px] tracking-wider font-bold mb-1">Valor Bruto do Frete (Declarado)</p>
+                          <p className="font-bold text-[#1e293b] text-base">{formatCurrency(resultado.vFreteBruto)}</p>
+                        </div>
+                     </div>
+                  </div>
+                )}
                 <div className="flex justify-between items-start mb-4">
                   <h3 className="m-0 text-[14px] flex items-center gap-2 uppercase tracking-[0.05em] font-bold text-[#64748b]">
                     📋 {t.resTitle}
                     {resultado.lucroFinal < 0 && <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-semibold uppercase bg-[#fee2e2] text-[#b91c1c] tracking-wide ml-2">{t.resPrejuizoBadge}</span>}
                   </h3>
                   
-                  <button 
-                    onClick={handleDownloadPDF} 
-                    disabled={isExportingPDF}
-                    className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#475569] py-1.5 px-3 rounded transition-colors disabled:opacity-50"
-                  >
-                    {isExportingPDF ? (
-                      <svg className="animate-spin h-3.5 w-3.5 text-[#475569]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    ) : (
+                  {!isExportingPDF && (
+                    <button 
+                      onClick={handleDownloadPDF} 
+                      disabled={isExportingPDF}
+                      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider bg-[#f1f5f9] hover:bg-[#e2e8f0] text-[#475569] py-1.5 px-3 rounded transition-colors disabled:opacity-50"
+                    >
                       <Download size={14} />
-                    )}
-                    {t.btnSalvarPDF}
-                  </button>
+                      {t.btnSalvarPDF}
+                    </button>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                  <div className="p-4 rounded-md border-l-4 border-[#1e40af] bg-[#eff6ff] sm:col-span-2">
-                    <div className="text-[11px] text-[#64748b] uppercase tracking-[0.05em] font-bold">{t.resLiquido} (Livre)</div>
-                    <div className={`text-2xl md:text-3xl font-bold mt-1 ${resultado.lucroFinal < 0 ? 'text-[#dc2626]' : 'text-[#1e293b]'}`}>
-                      {formatCurrency(resultado.lucroFinal)}
+                  <div className="p-4 rounded-md border-l-4 border-[#1e40af] bg-[#eff6ff] sm:col-span-2 flex justify-between items-center flex-wrap gap-4">
+                    <div>
+                      <div className="text-[11px] text-[#64748b] uppercase tracking-[0.05em] font-bold">{t.resLiquido} (Livre)</div>
+                      <div className={`text-2xl md:text-3xl font-bold mt-1 ${resultado.lucroFinal < 0 ? 'text-[#dc2626]' : 'text-[#1e293b]'}`}>
+                        {formatCurrency(resultado.lucroFinal)}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-[#64748b] uppercase tracking-[0.05em] font-bold">{t.resLucroDolar}</div>
+                      <div className={`text-xl md:text-2xl font-bold mt-1 ${resultado.lucroFinalDolar < 0 ? 'text-[#dc2626]' : 'text-[#1e293b]'}`}>
+                        $ {resultado.lucroFinalDolar.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
                     </div>
                   </div>
 
@@ -653,9 +743,9 @@ export default function App() {
                         <strong className="text-[#ef4444]">- {formatCurrency(resultado.mermas)}</strong>
                       </div>
                     )}
-                    <div className="flex justify-between items-center px-4 py-3 bg-[#fef2f2]">
-                      <span className="text-[#991b1b] font-bold">{t.resDiferenca || 'Diferencia Mínimo Legal:'}</span>
-                      <strong className="text-[#b91c1c]">
+                    <div className={`flex justify-between items-center px-4 py-3 ${resultado.vFrete - resultado.custoMinimoLegal >= 0 ? 'bg-[#ecfdf5]' : 'bg-[#fef2f2]'}`}>
+                      <span className={`font-bold ${resultado.vFrete - resultado.custoMinimoLegal >= 0 ? 'text-[#065f46]' : 'text-[#991b1b]'}`}>{t.resDiferenca || 'Diferencia Mínimo Legal:'}</span>
+                      <strong className={resultado.vFrete - resultado.custoMinimoLegal >= 0 ? 'text-[#047857]' : 'text-[#b91c1c]'}>
                         {formatCurrency(resultado.vFrete - resultado.custoMinimoLegal)}
                       </strong>
                     </div>
@@ -682,9 +772,9 @@ export default function App() {
                         <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoManut)}</span>
                       </button>
                       <AnimatePresence>
-                        {expandedManut && (
+                        {(expandedManut || isExportingPDF) && (
                           <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
+                            initial={{ height: isExportingPDF ? 'auto' : 0, opacity: isExportingPDF ? 1 : 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden bg-white"
@@ -716,9 +806,9 @@ export default function App() {
                         <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoSalarios)}</span>
                       </button>
                       <AnimatePresence>
-                        {expandedSalarios && (
+                        {(expandedSalarios || isExportingPDF) && (
                           <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
+                            initial={{ height: isExportingPDF ? 'auto' : 0, opacity: isExportingPDF ? 1 : 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden bg-white"
@@ -755,9 +845,9 @@ export default function App() {
                         <span className="text-[#1e293b] font-bold">{formatCurrency(resultado.descontoAdm)}</span>
                       </button>
                       <AnimatePresence>
-                        {expandedAdm && (
+                        {(expandedAdm || isExportingPDF) && (
                           <motion.div 
-                            initial={{ height: 0, opacity: 0 }}
+                            initial={{ height: isExportingPDF ? 'auto' : 0, opacity: isExportingPDF ? 1 : 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
                             className="overflow-hidden bg-white"
@@ -831,7 +921,7 @@ export default function App() {
                     </div>
                   </div>
 
-                    {resultado.vFrete < resultado.custoMinimoLegal && (
+                    {resultado.vFrete < resultado.custoMinimoLegal && !isExportingPDF && (
                       <div className="bg-[#f8fafc] border border-[#e2e8f0] p-4 text-left rounded-md mt-4">
                         
                         <h4 className="font-bold text-[#0f172a] mb-3 flex items-center gap-2 text-[14px] uppercase border-b border-[#e2e8f0] pb-2">
@@ -944,6 +1034,17 @@ export default function App() {
                         </div>
                       </div>
                     )}
+                    
+                {isExportingPDF && (
+                  <div className="mt-8 pt-6 border-t border-[#e2e8f0] text-center flex flex-col items-center">
+                    <p className="text-[12px] font-bold text-[#1e293b] uppercase tracking-widest">{t.appTitle}</p>
+                    <p className="text-[10px] text-[#64748b] mt-1 italic">{t.footerTxt || 'Sistema Independente de Fiscalização de Cargas'}</p>
+                    <div className="mt-4 flex flex-col items-center">
+                      <div className="w-32 border-b border-[#cbd5e1] mb-2 border-dashed"></div>
+                      <p className="text-[9px] text-[#94a3b8] uppercase tracking-wider">{t.footerAss || 'Válido para fins de conferência legal'}</p>
+                    </div>
+                  </div>
+                )}
                 </div>
               </div>
             </section>
