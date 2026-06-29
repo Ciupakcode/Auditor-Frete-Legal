@@ -42,12 +42,6 @@ export const translations = {
     
     inputTransportadora: "Transportadora (Nome ou RUC)",
     inputSearch: "Busque ou digite...",
-    alertaCritico: "ALERTA CRÍTICO",
-    alertaMassivo: "Histórico massivo de subfaturamento.",
-    alertaAtencao: "ATENÇÃO",
-    alertaIrregularidades: "Irregularidades em análise via Expediente.",
-    alertaRegular: "REGULAR",
-    alertaSemRegistros: "Sem registros de infrações massivas recentes.",
     
     inputChapa: "Chapa (Placa)",
     inputDistanciaReal: "Distância Real (GPS/Maps)",
@@ -174,12 +168,6 @@ export const translations = {
     
     inputTransportadora: "Transportadora (Nombre o RUC)",
     inputSearch: "Busque o escriba...",
-    alertaCritico: "ALERTA CRÍTICO",
-    alertaMassivo: "Historial masivo de subfacturación.",
-    alertaAtencao: "ATENCIÓN",
-    alertaIrregularidades: "Irregularidades en análisis vía Expediente.",
-    alertaRegular: "REGULAR",
-    alertaSemRegistros: "Sin registros de infracciones masivas recientes.",
     
     inputChapa: "Chapa (Placa)",
     inputDistanciaReal: "Distancia Real (GPS/Maps)",
@@ -306,12 +294,6 @@ export const translations = {
     
     inputTransportadora: "Transportadora (Nombre térã RUC)",
     inputSearch: "Eheka térã ehai...",
-    alertaCritico: "ALERTA CRÍTICA",
-    alertaMassivo: "Ivaíma la isubfacturación kuéra.",
-    alertaAtencao: "EÑANGAREKÓKE",
-    alertaIrregularidades: "Oñehesa'ỹijo hína umi irregularidades rehegue.",
-    alertaRegular: "REGULAR",
-    alertaSemRegistros: "Ndaipóri infracción guasu ko'áĝa.",
     
     inputChapa: "Chapa (Placa)",
     inputDistanciaReal: "Distancia Real (GPS/Maps)",

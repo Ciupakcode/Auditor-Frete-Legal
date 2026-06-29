@@ -114,31 +114,7 @@ export default function App() {
     ).slice(0, 50);
   }, [deferredEmpresa, allEmpresas]);
 
-  const riskLevel = useMemo(() => {
-    if (!deferredEmpresa || deferredEmpresa.trim() === '') return null;
-    const search = deferredEmpresa.toLowerCase().trim();
-    
-    // First try an exact match by RUC if the user selected from the dropdown "(RUC: 12345)"
-    const rucMatch = deferredEmpresa.match(/\(RUC:\s*([\d\.-]+)\)/i);
-    let match;
-    
-    if (rucMatch) {
-       match = allEmpresas.find(c => c.ruc === rucMatch[1]);
-    }
 
-    if (!match) {
-      match = allEmpresas.find(c => 
-         c.empresa.toLowerCase().includes(search) || 
-         c.ruc.toLowerCase().includes(search) ||
-         search.includes(c.ruc.toLowerCase())
-      );
-    }
-    
-    if (match) {
-      return { level: 'REGULAR', infracoes: 0 };
-    }
-    return { level: 'REGULAR', infracoes: 0 };
-  }, [deferredEmpresa, allEmpresas]);
 
   const formatCurrency = (value: number) => {
     return `₲ ${value.toLocaleString('es-PY', { maximumFractionDigits: 0 })}`;
@@ -385,23 +361,13 @@ export default function App() {
                           </div>
                           <div className="text-[11px] text-[#64748b] mt-0.5 flex items-center gap-2">
                             <span>RUC: {s.ruc}</span>
-                            {s.status === 'Risco Crítico' && <span className="text-[#ef4444] font-bold">⚠️ {t.riscoCritico}</span>}
-                            {s.status === 'Sob Investigação' && <span className="text-[#f59e0b] font-bold">⚠️ {t.sobInvestigacao}</span>}
-                            {s.status === 'Regular' && <span className="text-[#10b981] font-bold">✅ Regular</span>}
                           </div>
                         </li>
                       ))}
                     </ul>
                   )}
 
-                  {riskLevel && (
-                    <div className="mt-2 p-2.5 rounded border text-[11px] flex gap-2 items-start bg-[#ecfdf5] border-[#d1fae5] text-[#065f46]">
-                      <CheckCircle2 className="shrink-0 mt-0.5" size={14} />
-                      <div>
-                        <span><strong className="block mb-0.5">{t.alertaRegular}</strong>{t.alertaSemRegistros}</span>
-                      </div>
-                    </div>
-                  )}
+
                 </div>
                 <div>
                   <label className="block text-[13px] font-semibold mb-1.5 text-[#475569]">{t.inputChapa}</label>
