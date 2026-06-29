@@ -35,9 +35,9 @@ export default function App() {
   const deferredEmpresa = useDeferredValue(empresa);
 
   // Market Data
-  const [cotacaoDolar, setCotacaoDolar] = useState<number>(7550);
-  const [precoDiesel, setPrecoDiesel] = useState<number>(8500);
-  const [consumoDiesel, setConsumoDiesel] = useState<number>(2.5);
+  const [cotacaoDolar, setCotacaoDolar] = useState<number | ''>(7550);
+  const [precoDiesel, setPrecoDiesel] = useState<number | ''>(8500);
+  const [consumoDiesel, setConsumoDiesel] = useState<number | ''>(2.5);
   
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -79,15 +79,16 @@ export default function App() {
       
       let heightLeft = imgHeight;
       let position = 0;
+      const margin = 10; // Margin for subsequent pages
 
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
       heightLeft -= pdfPageHeight;
 
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
+        position = (heightLeft - imgHeight) + margin;
         pdf.addPage();
         pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfPageHeight;
+        heightLeft -= (pdfPageHeight - margin);
       }
       
       pdf.save(`Auditoria-Frete-${chapa || 'Legal'}.pdf`);
@@ -154,6 +155,8 @@ export default function App() {
     
     const lucroFinal = vFreteDescontado - descontoIva - custoMinimoLegal - custoEstadia;
 
+    const cotacao = Number(cotacaoDolar) || 7550;
+    
     setResultado({
       kmRoubado,
       prejuizoKm,
@@ -166,7 +169,7 @@ export default function App() {
       custoDieselEstimado: descontoDiesel,
       custoEstadia,
       lucroFinal,
-      lucroFinalDolar: lucroFinal / cotacaoDolar,
+      lucroFinalDolar: lucroFinal / cotacao,
       vFrete: vFreteDescontado, 
       vFreteBruto: vFrete,
       mermas,
@@ -307,7 +310,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2 bg-white border border-[#cbd5e1] rounded text-[12px] focus:ring-1 focus:ring-[#1e40af] outline-none font-semibold"
                     value={cotacaoDolar}
-                    onChange={(e) => setCotacaoDolar(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setCotacaoDolar(e.target.value === '' ? '' : Number(e.target.value))}
                   />
                 </div>
                 <div>
@@ -316,7 +320,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2 bg-white border border-[#cbd5e1] rounded text-[12px] focus:ring-1 focus:ring-[#1e40af] outline-none font-semibold"
                     value={precoDiesel}
-                    onChange={(e) => setPrecoDiesel(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setPrecoDiesel(e.target.value === '' ? '' : Number(e.target.value))}
                   />
                 </div>
                 <div>
@@ -326,7 +331,8 @@ export default function App() {
                     className="w-full p-2 bg-white border border-[#cbd5e1] rounded text-[12px] focus:ring-1 focus:ring-[#1e40af] outline-none font-semibold"
                     value={consumoDiesel}
                     step="0.1"
-                    onChange={(e) => setConsumoDiesel(Number(e.target.value))}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setConsumoDiesel(e.target.value === '' ? '' : Number(e.target.value))}
                   />
                 </div>
               </div>
@@ -388,7 +394,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
                     value={distanciaGps}
-                    onChange={(e) => setDistanciaGps(Number(e.target.value) || '')}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDistanciaGps(e.target.value === '' ? '' : Number(e.target.value))}
                     min="1"
                     placeholder="Ex: 350 km"
                   />
@@ -399,7 +406,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
                     value={distanciaPapel}
-                    onChange={(e) => setDistanciaPapel(Number(e.target.value) || '')}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDistanciaPapel(e.target.value === '' ? '' : Number(e.target.value))}
                     min="1"
                     placeholder="Ex: 350 km"
                   />
@@ -413,7 +421,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
                     value={pesoCarga}
-                    onChange={(e) => setPesoCarga(Number(e.target.value) || '')}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setPesoCarga(e.target.value === '' ? '' : Number(e.target.value))}
                     min="1"
                     step="0.1"
                     placeholder="0.0"
@@ -425,7 +434,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
                     value={diasEstadia}
-                    onChange={(e) => setDiasEstadia(Number(e.target.value) || '')}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDiasEstadia(e.target.value === '' ? '' : Number(e.target.value))}
                     min="0"
                     placeholder="Ex: 2"
                   />
@@ -439,7 +449,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
                     value={valorFrete}
-                    onChange={(e) => setValorFrete(Number(e.target.value) || '')}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setValorFrete(e.target.value === '' ? '' : Number(e.target.value))}
                     min="1"
                     placeholder="0"
                   />
@@ -450,7 +461,8 @@ export default function App() {
                     type="number" 
                     className="w-full p-2.5 border border-[#cbd5e1] rounded text-[14px] bg-white focus:outline-none focus:ring-1 focus:ring-[#1e40af] focus:border-[#1e40af] transition-colors"
                     value={descontoMermas}
-                    onChange={(e) => setDescontoMermas(Number(e.target.value) || '')}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDescontoMermas(e.target.value === '' ? '' : Number(e.target.value))}
                     min="0"
                     placeholder="0"
                   />
@@ -827,7 +839,8 @@ export default function App() {
                                 type="number" 
                                 className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
                                 value={kmInicial}
-                                onChange={(e) => setKmInicial(Number(e.target.value) || '')}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => setKmInicial(e.target.value === '' ? '' : Number(e.target.value))}
                                 placeholder="Ex: 120500"
                               />
                             </div>
@@ -837,7 +850,8 @@ export default function App() {
                                 type="number" 
                                 className="w-full p-2 border border-[#cbd5e1] rounded text-[13px] focus:outline-none focus:ring-1 focus:ring-[#1e40af]"
                                 value={kmFinal}
-                                onChange={(e) => setKmFinal(Number(e.target.value) || '')}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => setKmFinal(e.target.value === '' ? '' : Number(e.target.value))}
                                 placeholder="Ex: 120850"
                               />
                             </div>
