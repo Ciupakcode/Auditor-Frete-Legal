@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useRef, useDeferredValue, useEffect } from 'react';
-import { Truck, AlertTriangle, FileText, Info, AlertCircle, Phone, ArrowRight, ArrowUp, ArrowDown, ArrowUpDown, Filter, BookOpen, X, CheckCircle2, Camera, Download, ChevronDown, ChevronUp, WifiOff } from 'lucide-react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { Truck, FileText, Info, AlertCircle, Phone, ArrowRight, BookOpen, X, CheckCircle2, Camera, Download, ChevronDown, ChevronUp, WifiOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { LISTA_NEGRA, TRANSPORTADORAS_VIGENTES, CompanyRecord, Status } from './data';
+import { TRANSPORTADORAS_VIGENTES, CompanyRecord, Status } from './data';
 import { translations, Language } from './i18n';
 import { getDinatranReference, DINATRAN_MATRIX } from './dinatran';
 
@@ -102,16 +101,7 @@ export default function App() {
   const [resultado, setResultado] = useState<any>(null);
 
   const allEmpresas = useMemo(() => {
-    // Deduplicate by RUC. We want LISTA_NEGRA to take precedence if there are duplicates.
-    const map = new Map<string, CompanyRecord>();
-    
-    // Base regulars
-    TRANSPORTADORAS_VIGENTES.forEach(c => map.set(c.ruc, c));
-    
-    // Negatives override
-    LISTA_NEGRA.forEach(c => map.set(c.ruc, c));
-    
-    return Array.from(map.values());
+    return TRANSPORTADORAS_VIGENTES;
   }, []);
 
   const filteredEmpresas = useMemo(() => {
@@ -145,59 +135,10 @@ export default function App() {
     }
     
     if (match) {
-      if (match.status === 'Risco Crítico') return { level: 'CRITICO', infracoes: match.infracoes };
-      if (match.status === 'Sob Investigação') return { level: 'ATENCAO', infracoes: match.infracoes };
       return { level: 'REGULAR', infracoes: 0 };
     }
     return { level: 'REGULAR', infracoes: 0 };
   }, [deferredEmpresa, allEmpresas]);
-
-  // Table State
-  const [sortField, setSortField] = useState<keyof CompanyRecord>('infracoes');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [filterStatus, setFilterStatus] = useState<'All' | Status>('All');
-
-  // Table Logic
-  const filteredAndSortedList = useMemo(() => {
-    let result = allEmpresas;
-    if (filterStatus !== 'All') {
-      result = result.filter(item => item.status === filterStatus);
-    } else {
-      // If 'All', show only the true "Lista Negra" (greater than 0 infractions)
-      result = result.filter(item => item.infracoes > 0);
-    }
-    result = [...result].sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-    return result;
-  }, [sortField, sortDirection, filterStatus]);
-
-  const parentRef = useRef<HTMLDivElement>(null);
-
-  const rowVirtualizer = useVirtualizer({
-    count: filteredAndSortedList.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 48,
-    overscan: 10,
-  });
-
-  const handleSort = (field: keyof CompanyRecord) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('desc');
-    }
-  };
-
-  const getSortIcon = (field: keyof CompanyRecord) => {
-    if (sortField !== field) return <ArrowUpDown size={12} className="opacity-40" />;
-    return sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />;
-  };
 
   const formatCurrency = (value: number) => {
     return `₲ ${value.toLocaleString('es-PY', { maximumFractionDigits: 0 })}`;
@@ -302,76 +243,12 @@ export default function App() {
           </AnimatePresence>
         </div>
         
-        <div className="p-5 flex-grow flex flex-col h-[400px] md:h-auto overflow-hidden">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs uppercase tracking-[0.05em] text-[#94a3b8] flex items-center gap-2 m-0">
-              <AlertTriangle size={16} /> {t.listaNegra}
-            </h3>
-            <div className="flex items-center gap-1.5 text-xs text-[#94a3b8]">
-              <Filter size={14}/>
-              <select 
-                className="bg-[#1e293b] text-white border border-[#334155] rounded px-1.5 py-1 text-xs focus:ring-1 focus:ring-[#38bdf8] outline-none cursor-pointer"
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value as 'All' | Status)}
-              >
-                <option value="All">{t.todos}</option>
-                <option value="Risco Crítico">{t.riscoCritico}</option>
-                <option value="Sob Investigação">{t.sobInvestigacao}</option>
-                <option value="Regular">Regular</option>
-              </select>
-            </div>
-          </div>
-          
-          <div className="flex flex-col flex-grow bg-[#1e293b] rounded-md border border-[#334155] overflow-hidden">
-             {/* Table Header */}
-             <div className="grid grid-cols-[3fr_2fr_3fr] gap-2 p-3 bg-[#0f172a] border-b border-[#334155] text-[10px] uppercase text-[#94a3b8] font-bold select-none">
-               <div className="cursor-pointer flex items-center gap-1 hover:text-white transition-colors truncate" onClick={() => handleSort('empresa')}>
-                 {t.empresa} {getSortIcon('empresa')}
-               </div>
-               <div className="cursor-pointer flex items-center gap-1 justify-end hover:text-white transition-colors" onClick={() => handleSort('infracoes')}>
-                 {t.infracoes} {getSortIcon('infracoes')}
-               </div>
-               <div className="cursor-pointer flex items-center gap-1 pl-2 hover:text-white transition-colors truncate" onClick={() => handleSort('status')}>
-                 {t.status} {getSortIcon('status')}
-               </div>
-             </div>
-
-              {/* Virtualized Body */}
-              <div ref={parentRef} className="flex-grow overflow-auto relative custom-scrollbar">
-                <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
-                  {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                    const item = filteredAndSortedList[virtualRow.index];
-                    return (
-                      <div
-                        key={virtualRow.key}
-                        data-index={virtualRow.index}
-                        ref={rowVirtualizer.measureElement}
-                        className="absolute top-0 left-0 w-full"
-                        style={{ 
-                          transform: `translateY(${virtualRow.start}px)` 
-                        }}
-                      >
-                        <div
-                          className="grid grid-cols-[3fr_2fr_3fr] gap-2 p-3 border-b border-[#334155]/50 items-center hover:bg-[#38bdf8]/15 hover:border-l-2 hover:border-l-[#38bdf8] transition-all cursor-default group"
-                        >
-                          <div className="text-[12px] font-medium truncate pr-1 group-hover:text-white transition-colors" title={item.empresa}>{item.empresa}</div>
-                          <div className="text-[11px] opacity-80 text-right group-hover:text-white transition-colors">{item.infracoes === 0 ? '--' : item.infracoes}</div>
-                          <div className="pl-2 flex overflow-hidden">
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide truncate ${item.status === 'Risco Crítico' ? 'bg-[#fee2e2]/10 text-[#fca5a5]' : item.status === 'Regular' ? 'bg-[#ecfdf5]/10 text-[#6ee7b7]' : 'bg-[#fef3c7]/10 text-[#fcd34d]'}`} title={item.status}>
-                              {item.status === 'Risco Crítico' ? t.riscoCritico : item.status === 'Regular' ? 'Regular' : t.sobInvestigacao}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                 {filteredAndSortedList.length === 0 && (
-                   <div className="absolute top-0 left-0 w-full p-4 text-center text-xs text-[#94a3b8] opacity-70">
-                     {t.nenhumRegistro}
-                   </div>
-                 )}
-               </div>
-             </div>
+        <div className="p-5 flex-grow flex flex-col justify-center items-center text-center">
+          <div className="bg-[#1e293b]/50 p-8 rounded-2xl border border-[#334155] max-w-[280px]">
+            <Truck size={48} className="text-[#38bdf8] mb-4 mx-auto opacity-50" />
+            <p className="text-sm text-[#94a3b8] italic">
+              {t.mainDesc}
+            </p>
           </div>
         </div>
         
@@ -518,14 +395,10 @@ export default function App() {
                   )}
 
                   {riskLevel && (
-                    <div className={`mt-2 p-2.5 rounded border text-[11px] flex gap-2 items-start ${riskLevel.level === 'CRITICO' ? 'bg-[#fee2e2] border-[#fecaca] text-[#b91c1c]' : riskLevel.level === 'ATENCAO' ? 'bg-[#fef3c7] border-[#fde68a] text-[#92400e]' : 'bg-[#ecfdf5] border-[#d1fae5] text-[#065f46]'}`}>
-                      {riskLevel.level === 'CRITICO' && <AlertCircle className="shrink-0 mt-0.5" size={14} />}
-                      {riskLevel.level === 'ATENCAO' && <AlertTriangle className="shrink-0 mt-0.5" size={14} />}
-                      {riskLevel.level === 'REGULAR' && <CheckCircle2 className="shrink-0 mt-0.5" size={14} />}
+                    <div className="mt-2 p-2.5 rounded border text-[11px] flex gap-2 items-start bg-[#ecfdf5] border-[#d1fae5] text-[#065f46]">
+                      <CheckCircle2 className="shrink-0 mt-0.5" size={14} />
                       <div>
-                        {riskLevel.level === 'CRITICO' && <span><strong className="block mb-0.5">{t.alertaCritico} ({riskLevel.infracoes} {t.infracoes.toLowerCase()})</strong>{t.alertaMassivo}</span>}
-                        {riskLevel.level === 'ATENCAO' && <span><strong className="block mb-0.5">{t.alertaAtencao} ({riskLevel.infracoes} {t.infracoes.toLowerCase()})</strong>{t.alertaIrregularidades}</span>}
-                        {riskLevel.level === 'REGULAR' && <span><strong className="block mb-0.5">{t.alertaRegular}</strong>{t.alertaSemRegistros}</span>}
+                        <span><strong className="block mb-0.5">{t.alertaRegular}</strong>{t.alertaSemRegistros}</span>
                       </div>
                     </div>
                   )}
@@ -955,7 +828,7 @@ export default function App() {
                         </div>
                       
                         <div className="bg-[#f1f5f9] p-4 rounded-lg border border-[#e2e8f0]">
-                          <h4 className="font-bold text-[#b91c1c] mb-2 flex items-center gap-2 text-[14px] uppercase"><AlertTriangle size={16} /> {t.denunciaTitle}</h4>
+                          <h4 className="font-bold text-[#b91c1c] mb-2 flex items-center gap-2 text-[14px] uppercase"><AlertCircle size={16} /> {t.denunciaTitle}</h4>
                           <p className="text-[13px] text-[#475569] mb-3">{t.denunciaDesc}</p>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 bg-white border border-[#cbd5e1] p-3 rounded shadow-sm">
